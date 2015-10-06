@@ -1488,6 +1488,21 @@ declare module Rx {
         zip<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult>(source1: ObservableOrPromise<T1>, source2: ObservableOrPromise<T2>, source3: ObservableOrPromise<T3>, source4: ObservableOrPromise<T4>, source5: ObservableOrPromise<T5>, source6: ObservableOrPromise<T6>, source7: ObservableOrPromise<T7>, source8: ObservableOrPromise<T8>, source9: ObservableOrPromise<T9>, resultSelector?: (item1: T1, item2: T2, item3: T3, item4: T4, item5: T5, item6: T6, item7: T7, item8: T8, item9: T9) => TResult): Observable<TResult>;
     }
 
+    export interface ObservableStatic {
+        /**
+        * Merges the specified observable sequences into one observable sequence by emitting a list with the elements of the observable sequences at corresponding indexes.
+        * @param arguments Observable sources.
+        * @returns {Observable} An observable sequence containing lists of elements at corresponding indexes.
+        */
+        zipIterable<T>(...sources: Observable<T>[]): Observable<T[]>;
+        /**
+        * Merges the specified observable sequences into one observable sequence by emitting a list with the elements of the observable sequences at corresponding indexes.
+        * @param arguments Observable sources.
+        * @returns {Observable} An observable sequence containing lists of elements at corresponding indexes.
+        */
+        zipIterable<T>(sources: Observable<T>[]): Observable<T[]>;
+    }
+
     export interface Observable<T> {
         /**
        *  Hides the identity of an observable sequence.
@@ -3297,49 +3312,6 @@ declare module Rx {
         shareReplay(bufferSize?: number, window?: number, scheduler?: IScheduler): Observable<T>;
     }
 
-    export interface BehaviorSubject<T> extends Subject<T> {
-        /**
-         * Gets the current value or throws an exception.
-         * Value is frozen after onCompleted is called.
-         * After onError is called always throws the specified exception.
-         * An exception is always thrown after dispose is called.
-         * @returns {Mixed} The initial value passed to the constructor until onNext is called; after which, the last value passed to onNext.
-         */
-        getValue(): T;
-    }
-
-    interface BehaviorSubjectStatic {
-        /**
-         *  Initializes a new instance of the BehaviorSubject class which creates a subject that caches its last value and starts with the specified value.
-         *  @param {Mixed} value Initial value sent to observers when no other value has been received by the subject yet.
-         */
-        new <T>(initialValue: T): BehaviorSubject<T>;
-    }
-
-    /**
-     *  Represents a value that changes over time.
-     *  Observers can subscribe to the subject to receive the last (or initial) value and all subsequent notifications.
-     */
-    export var BehaviorSubject: BehaviorSubjectStatic;
-
-    export interface ReplaySubject<T> extends Subject<T> { }
-
-    interface ReplaySubjectStatic {
-        /**
-         *  Initializes a new instance of the ReplaySubject class with the specified buffer size, window size and scheduler.
-         *  @param {Number} [bufferSize] Maximum element count of the replay buffer.
-         *  @param {Number} [windowSize] Maximum time length of the replay buffer.
-         *  @param {Scheduler} [scheduler] Scheduler the observers are invoked on.
-         */
-        new <T>(bufferSize?: number, window?: number, scheduler?: IScheduler): ReplaySubject<T>;
-    }
-
-    /**
-    * Represents an object that is both an observable sequence as well as an observer.
-    * Each notification is broadcasted to all subscribed and future observers, subject to buffer trimming policies.
-    */
-    export var ReplaySubject: ReplaySubjectStatic;
-
     export interface Observable<T> {
         /**
         * Returns an observable sequence that shares a single subscription to the underlying sequence. This observable sequence
@@ -4862,6 +4834,49 @@ declare module Rx {
      *  The last value before the OnCompleted notification, or the error received through OnError, is sent to all subscribed observers.
      */
     export var AsyncSubject: AsyncSubjectStatic;
+
+    export interface BehaviorSubject<T> extends Subject<T> {
+        /**
+         * Gets the current value or throws an exception.
+         * Value is frozen after onCompleted is called.
+         * After onError is called always throws the specified exception.
+         * An exception is always thrown after dispose is called.
+         * @returns {Mixed} The initial value passed to the constructor until onNext is called; after which, the last value passed to onNext.
+         */
+        getValue(): T;
+    }
+
+    interface BehaviorSubjectStatic {
+        /**
+         *  Initializes a new instance of the BehaviorSubject class which creates a subject that caches its last value and starts with the specified value.
+         *  @param {Mixed} value Initial value sent to observers when no other value has been received by the subject yet.
+         */
+        new <T>(initialValue: T): BehaviorSubject<T>;
+    }
+
+    /**
+     *  Represents a value that changes over time.
+     *  Observers can subscribe to the subject to receive the last (or initial) value and all subsequent notifications.
+     */
+    export var BehaviorSubject: BehaviorSubjectStatic;
+
+    export interface ReplaySubject<T> extends Subject<T> { }
+
+    interface ReplaySubjectStatic {
+        /**
+         *  Initializes a new instance of the ReplaySubject class with the specified buffer size, window size and scheduler.
+         *  @param {Number} [bufferSize] Maximum element count of the replay buffer.
+         *  @param {Number} [windowSize] Maximum time length of the replay buffer.
+         *  @param {Scheduler} [scheduler] Scheduler the observers are invoked on.
+         */
+        new <T>(bufferSize?: number, window?: number, scheduler?: IScheduler): ReplaySubject<T>;
+    }
+
+    /**
+    * Represents an object that is both an observable sequence as well as an observer.
+    * Each notification is broadcasted to all subscribed and future observers, subject to buffer trimming policies.
+    */
+    export var ReplaySubject: ReplaySubjectStatic;
 
     export interface AnonymousSubject<T> extends Subject<T> { }
 

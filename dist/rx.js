@@ -1286,33 +1286,36 @@
        __super__.call(this);
      }
 
-     function DefaultSchedulerDisposable(id) {
+     function scheduleAction(disposable, action, scheduler, state) {
+       return function schedule() {
+         !disposable.isDisposed && disposable.setDisposable(Disposable._fixup(action(scheduler, state)));
+       };
+     }
+
+     function ClearDisposable(method, id) {
        this._id = id;
+       this._method = method;
        this.isDisposed = false;
      }
 
-     DefaultSchedulerDisposable.prototype.dispose = function () {
+     ClearDisposable.prototype.dispose = function () {
        if (!this.isDisposed) {
          this.isDisposed = true;
-         localClearTimeout(this._id);
+         this._method.call(null, this._id);
        }
      };
 
     DefaultScheduler.prototype.schedule = function (state, action) {
-      var scheduler = this, disposable = new SingleAssignmentDisposable();
-      var id = scheduleMethod(function () {
-        !disposable.isDisposed && disposable.setDisposable(disposableFixup(action(scheduler, state)));
-      });
-      return new BinaryDisposable(disposable, new DefaultSchedulerDisposable(id));
+      var disposable = new SingleAssignmentDisposable(),
+          id = scheduleMethod(scheduleAction(disposable, action, this, state));
+      return new BinaryDisposable(disposable, new ClearDisposable(clearMethod, id));
     };
 
     DefaultScheduler.prototype._scheduleFuture = function (state, dueTime, action) {
-      var scheduler = this, dt = Scheduler.normalize(dueTime), disposable = new SingleAssignmentDisposable();
-      if (dt === 0) { return scheduler.schedule(state, action); }
-      var id = localSetTimeout(function () {
-        !disposable.isDisposed && disposable.setDisposable(disposableFixup(action(scheduler, state)));
-      }, dt);
-      return new BinaryDisposable(disposable, new DefaultSchedulerDisposable(id));
+      if (dueTime === 0) { return this.schedule(state, action); }
+      var disposable = new SingleAssignmentDisposable(),
+          id = localSetTimeout(scheduleAction(disposable, action, this, state), dueTime);
+      return new BinaryDisposable(disposable, new ClearDisposable(localClearTimeout, id));
     };
 
     return DefaultScheduler;
@@ -2394,20 +2397,34 @@ var ObserveOnObservable = (function (__super__) {
 
   var FromPromiseObservable = (function(__super__) {
     inherits(FromPromiseObservable, __super__);
-    function FromPromiseObservable(p) {
-      this.p = p;
+    function FromPromiseObservable(p, s) {
+      this._p = p;
+      this._s = s;
       __super__.call(this);
     }
 
+    function scheduleNext(s, state) {
+      var o = state[0], data = state[1];
+      o.onNext(data);
+      o.onCompleted();
+    }
+
+    function scheduleError(s, state) {
+      var o = state[0], err = state[1];
+      o.onError(err);
+    }
+
     FromPromiseObservable.prototype.subscribeCore = function(o) {
-      this.p
+      var sad = new SingleAssignmentDisposable(), self = this;
+
+      this._p
         .then(function (data) {
-          o.onNext(data);
-          o.onCompleted();
+          sad.setDisposable(self._s.schedule([o, data], scheduleNext));
         }, function (err) {
-          o.onError(err);
+          sad.setDisposable(self._s.schedule([o, err], scheduleError));
         });
-      return disposableEmpty;
+
+      return sad;
     };
 
     return FromPromiseObservable;
@@ -2418,8 +2435,9 @@ var ObserveOnObservable = (function (__super__) {
   * @param {Promise} An ES6 Compliant promise.
   * @returns {Observable} An Observable sequence which wraps the existing promise success and failure.
   */
-  var observableFromPromise = Observable.fromPromise = function (promise) {
-    return new FromPromiseObservable(promise);
+  var observableFromPromise = Observable.fromPromise = function (promise, scheduler) {
+    scheduler || (scheduler = defaultScheduler);
+    return new FromPromiseObservable(promise, scheduler);
   };
 
   /*
@@ -5040,7 +5058,7 @@ observableProto.flatMapConcat = observableProto.concatMap = function(selector, r
     };
 
     DefaultIfEmptyObserver.prototype.completed = function () {
-      !this._f && this._o.onNext(defaultValue);
+      !this._f && this._o.onNext(this._d);
       this._o.onCompleted();
     };
 
@@ -5844,7 +5862,7 @@ Rx.Observable.prototype.flatMapLatest = function(selector, resultSelector, thisA
       this.hasError = false;
     }
 
-    addProperties(AsyncSubject.prototype, Observer, {
+    addProperties(AsyncSubject.prototype, Observer.prototype, {
       _subscribe: function (o) {
         checkDisposed(this);
 

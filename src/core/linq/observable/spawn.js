@@ -1,10 +1,10 @@
   Observable.wrap = function (fn) {
-    createObservable.__generatorFunction__ = fn;
-    return createObservable;
-
     function createObservable() {
       return Observable.spawn.call(this, fn.apply(this, arguments));
     }
+
+    createObservable.__generatorFunction__ = fn;
+    return createObservable;
   };
 
   var spawn = Observable.spawn = function () {
@@ -20,13 +20,13 @@
         return o.onCompleted();
       }
 
-      processGenerator();
-
       function processGenerator(res) {
         var ret = tryCatch(gen.next).call(gen, res);
         if (ret === errorObj) { return o.onError(ret.e); }
         next(ret);
       }
+
+      processGenerator();
 
       function onError(err) {
         var ret = tryCatch(gen.next).call(gen, err);
@@ -40,9 +40,16 @@
           o.onCompleted();
           return;
         }
-        var value = toObservable.call(self, ret.value);
-        if (Observable.isObservable(value)) {
-          g.add(value.subscribe(processGenerator, onError));
+        var obs = toObservable.call(self, ret.value);
+        var value = null;
+        var hasValue = false;
+        if (Observable.isObservable(obs)) {
+          g.add(obs.subscribe(function(val) {
+            hasValue = true;
+            value = val;
+          }, onError, function() {
+            hasValue && processGenerator(value);
+          }));
         } else {
           onError(new TypeError('type not supported'));
         }
@@ -64,9 +71,13 @@
   }
 
   function arrayToObservable (obj) {
-    return Observable.from(obj)
-        .flatMap(toObservable)
-        .toArray();
+    return Observable.from(obj).concatMap(function(o) {
+      if(Observable.isObservable(o) || isObject(o)) {
+        return toObservable.call(null, o);
+      } else {
+        return Rx.Observable.just(o);
+      }
+    }).toArray();
   }
 
   function objectToObservable (obj) {

@@ -599,14 +599,16 @@ var
   }(Scheduler.prototype));
 
   var SchedulePeriodicRecursive = Rx.internals.SchedulePeriodicRecursive = (function () {
-    function tick(command, recurse) {
-      recurse(0, this._period);
-      try {
-        this._state = this._action(this._state);
-      } catch (e) {
-        this._cancel.dispose();
-        throw e;
-      }
+    function createTick(self) {
+      return function tick(command, recurse) {
+        recurse(0, self._period);
+        var state = tryCatch(self._action)(self._state);
+        if (state === errorObj) {
+          self._cancel.dispose();
+          thrower(state.e);
+        }
+        self._state = state;
+      };
     }
 
     function SchedulePeriodicRecursive(scheduler, state, period, action) {
@@ -619,7 +621,7 @@ var
     SchedulePeriodicRecursive.prototype.start = function () {
       var d = new SingleAssignmentDisposable();
       this._cancel = d;
-      d.setDisposable(this._scheduler.scheduleRecursiveFuture(0, this._period, tick.bind(this)));
+      d.setDisposable(this._scheduler.scheduleRecursiveFuture(0, this._period, createTick(this)));
 
       return d;
     };
@@ -839,34 +841,45 @@ var
 
      function scheduleAction(disposable, action, scheduler, state) {
        return function schedule() {
-         !disposable.isDisposed && disposable.setDisposable(Disposable._fixup(action(scheduler, state)));
+         disposable.setDisposable(Disposable._fixup(action(scheduler, state)));
        };
      }
 
-     function ClearDisposable(method, id) {
+     function ClearDisposable(id) {
        this._id = id;
-       this._method = method;
        this.isDisposed = false;
      }
 
      ClearDisposable.prototype.dispose = function () {
        if (!this.isDisposed) {
          this.isDisposed = true;
-         this._method.call(null, this._id);
+         clearMethod(this._id);
+       }
+     };
+
+     function LocalClearDisposable(id) {
+       this._id = id;
+       this.isDisposed = false;
+     }
+
+     LocalClearDisposable.prototype.dispose = function () {
+       if (!this.isDisposed) {
+         this.isDisposed = true;
+         localClearTimeout(this._id);
        }
      };
 
     DefaultScheduler.prototype.schedule = function (state, action) {
       var disposable = new SingleAssignmentDisposable(),
           id = scheduleMethod(scheduleAction(disposable, action, this, state));
-      return new BinaryDisposable(disposable, new ClearDisposable(clearMethod, id));
+      return new BinaryDisposable(disposable, new ClearDisposable(id));
     };
 
     DefaultScheduler.prototype._scheduleFuture = function (state, dueTime, action) {
       if (dueTime === 0) { return this.schedule(state, action); }
       var disposable = new SingleAssignmentDisposable(),
           id = localSetTimeout(scheduleAction(disposable, action, this, state), dueTime);
-      return new BinaryDisposable(disposable, new ClearDisposable(localClearTimeout, id));
+      return new BinaryDisposable(disposable, new LocalClearDisposable(id));
     };
 
     return DefaultScheduler;
